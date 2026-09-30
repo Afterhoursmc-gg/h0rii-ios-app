@@ -1,6 +1,7 @@
 import SwiftUI
 import Speech
 import AVFoundation
+import AVFAudio
 import Contacts
 import UIKit
 
@@ -336,7 +337,7 @@ struct VoiceAssistantView: View {
 
                             Text(assistant.transcript.isEmpty ? "Try: ‘Hei H0RII, når går bussen fra Oslo S til Gardermoen?’" : assistant.transcript)
                                 .font(.body)
-                                .foregroundStyle(assistant.transcript.isEmpty ? .secondary : .white)
+                                .foregroundColor(assistant.transcript.isEmpty ? Color.secondary : Color.white)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
                                 .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 18))
@@ -514,8 +515,14 @@ final class VoiceAssistantController: NSObject, ObservableObject {
 
     private func requestMicrophonePermission() async -> Bool {
         await withCheckedContinuation { continuation in
-            AVAudioSession.sharedInstance().requestRecordPermission { allowed in
-                continuation.resume(returning: allowed)
+            if #available(iOS 17.0, *) {
+                AVAudioApplication.requestRecordPermission { allowed in
+                    continuation.resume(returning: allowed)
+                }
+            } else {
+                AVAudioSession.sharedInstance().requestRecordPermission { allowed in
+                    continuation.resume(returning: allowed)
+                }
             }
         }
     }
