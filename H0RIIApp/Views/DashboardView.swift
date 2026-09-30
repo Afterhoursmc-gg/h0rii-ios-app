@@ -312,7 +312,7 @@ struct VoiceAssistantView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("H0RII Voice")
                                 .font(.largeTitle.bold())
-                            Text("Push-to-talk assistant for bus routes, weather, calls, calculator and translation.")
+                            Text("All-in-one QoL assistant. Ask anything in the app — no browser jump-outs.")
                                 .foregroundStyle(.secondary)
                         }
 
@@ -449,17 +449,17 @@ final class VoiceAssistantController: NSObject, ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         if normalized.contains("buss") || normalized.contains("bus") {
-            openTransit(from: normalized)
+            planTransit(from: normalized)
         } else if normalized.contains("vær") || normalized.contains("weather") {
-            openWeather(from: normalized)
+            Task { await weather(from: normalized) }
         } else if normalized.hasPrefix("ring ") || normalized.contains(" ring ") || normalized.hasPrefix("call ") {
-            callContactOrNumber(from: normalized)
+            prepareCallContactOrNumber(from: normalized)
         } else if normalized.contains("kalkuler") || normalized.contains("calculator") || normalized.contains("regn ut") {
             calculate(from: normalized)
         } else if normalized.contains("oversett") || normalized.contains("translate") {
             translate(from: normalized)
         } else {
-            answer("I can help with bus routes, weather, contacts, calculator and translation. Try saying: buss fra Oslo S til Gardermoen.")
+            answer(generalAnswer(for: normalized))
         }
     }
 
@@ -529,28 +529,31 @@ final class VoiceAssistantController: NSObject, ObservableObject {
         synthesizer.speak(utterance)
     }
 
-    private func openTransit(from text: String) {
+    private func planTransit(from text: String) {
         let parts = splitFromTo(text)
         guard let from = parts.from, let to = parts.to else {
-            answer("Say it like: buss fra Oslo S til Gardermoen.")
+            answer("Si det sånn: buss fra Oslo S til Gardermoen. Jeg holder svaret inne i appen.")
             return
         }
-        openURL("http://maps.apple.com/?saddr=\(from.urlEncoded)&daddr=\(to.urlEncoded)&dirflg=r")
-        answer("Opening transit directions from \(from) to \(to).")
+        answer("Buss fra \(from) til \(to): Jeg har laget in-app ruteplan. Neste steg er å koble denne til Entur API for ekte avgangstider. Foreløpig: gå til \(from), velg kollektiv retning \(to), og sjekk neste avgang i H0RII når API-et er koblet.")
     }
 
-    private func openWeather(from text: String) {
+    private func weather(from text: String) async {
         let city = text
             .replacingOccurrences(of: "hvordan er været i", with: "")
             .replacingOccurrences(of: "vær i", with: "")
             .replacingOccurrences(of: "weather in", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let query = city.isEmpty ? "current location" : city
-        openURL("https://www.yr.no/en/search?q=\(query.urlEncoded)")
-        answer("Opening weather for \(query).")
+        let query = city.isEmpty ? "Oslo" : city
+        do {
+            let weather = try await OpenMeteoService.fetchWeather(for: query)
+            answer("Været i \(weather.name): \(weather.temperature.cleanString) grader, vind \(weather.wind.cleanString) meter per sekund. Dette vises direkte i appen.")
+        } catch {
+            answer("Jeg klarte ikke hente været akkurat nå, men jeg blir i appen. Prøv: vær i Oslo.")
+        }
     }
 
-    private func callContactOrNumber(from text: String) {
+    private func prepareCallContactOrNumber(from text: String) {
         let query = text
             .replacingOccurrences(of: "ring", with: "")
             .replacingOccurrences(of: "call", with: "")
@@ -560,8 +563,7 @@ final class VoiceAssistantController: NSObject, ObservableObject {
             return
         }
         if let direct = normalizedPhoneNumber(query), !direct.isEmpty {
-            openURL("tel://\(direct)")
-            answer("Calling \(query).")
+            answer("Jeg fant nummeret \(direct). Jeg holder deg inne i appen — legg til en bekreft-knapp senere hvis du vil at H0RII faktisk skal starte samtalen.")
             return
         }
 
@@ -583,8 +585,7 @@ final class VoiceAssistantController: NSObject, ObservableObject {
                     }
                 }
                 if let match, let phone = self.normalizedPhoneNumber(match.phone) {
-                    self.openURL("tel://\(phone)")
-                    self.answer("Calling \(match.name).")
+                    self.answer("Jeg fant \(match.name): \(phone). Jeg blir i appen og viser nummeret her i stedet for å sende deg ut.")
                 } else {
                     self.answer("I could not find \(query) in contacts.")
                 }
@@ -614,11 +615,27 @@ final class VoiceAssistantController: NSObject, ObservableObject {
             .replacingOccurrences(of: "translate", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !phrase.isEmpty else {
-            answer("Say what you want me to translate.")
+            answer("Si hva du vil jeg skal oversette.")
             return
         }
-        openURL("https://translate.google.com/?sl=auto&tl=en&text=\(phrase.urlEncoded)&op=translate")
-        answer("Opening translation for: \(phrase).")
+        let translated = LocalTranslator.translate(phrase)
+        answer(translated)
+    }
+
+    private func generalAnswer(for text: String) -> String {
+        if text.contains("hva er horii") || text.contains("ka e horii") {
+            return "H0RII er brandet og systemet rundt prosjektene dine: web, Minecraft, bots, sikkerhet, produktbygging og nå iOS-assistenten."
+        }
+        if text.contains("hvem er jhonatan") {
+            return "Jhonatan Wik er H0RII: norsk digital creator, developer og entrepreneur født i 2006."
+        }
+        if text.contains("hjelp") || text.contains("help") || text.contains("kan du") {
+            return "Ja. Jeg kan svare inne i appen, regne, oversette enkle ting, vise vær, lage buss-plan, finne kontaktinfo og lese svaret høyt."
+        }
+        if text.contains("status") {
+            return "Status akkurat nå: H0RII web er live, AfterHoursMC er live, HXSecurity bygges, og appen er under aktiv utvikling."
+        }
+        return "Jeg skjønte spørsmålet, men har ikke full AI-backend koblet enda. Jeg svarer lokalt nå, og neste steg er å koble H0RII Voice til en trygg server-side AI endpoint så du kan spørre om hva som helst uten å forlate appen."
     }
 
     private func splitFromTo(_ text: String) -> (from: String?, to: String?) {
@@ -638,6 +655,65 @@ final class VoiceAssistantController: NSObject, ObservableObject {
     private func openURL(_ raw: String) {
         guard let url = URL(string: raw) else { return }
         UIApplication.shared.open(url)
+    }
+}
+
+struct WeatherAnswer {
+    let name: String
+    let temperature: Double
+    let wind: Double
+}
+
+struct OpenMeteoService {
+    struct GeoResponse: Decodable {
+        let results: [Place]?
+    }
+
+    struct Place: Decodable {
+        let name: String
+        let latitude: Double
+        let longitude: Double
+        let country: String?
+    }
+
+    struct ForecastResponse: Decodable {
+        let current_weather: CurrentWeather
+    }
+
+    struct CurrentWeather: Decodable {
+        let temperature: Double
+        let windspeed: Double
+    }
+
+    static func fetchWeather(for city: String) async throws -> WeatherAnswer {
+        let geoURL = URL(string: "https://geocoding-api.open-meteo.com/v1/search?name=\(city.urlEncoded)&count=1&language=no&format=json")!
+        let (geoData, _) = try await URLSession.shared.data(from: geoURL)
+        let geo = try JSONDecoder().decode(GeoResponse.self, from: geoData)
+        guard let place = geo.results?.first else { throw URLError(.cannotFindHost) }
+        let forecastURL = URL(string: "https://api.open-meteo.com/v1/forecast?latitude=\(place.latitude)&longitude=\(place.longitude)&current_weather=true")!
+        let (forecastData, _) = try await URLSession.shared.data(from: forecastURL)
+        let forecast = try JSONDecoder().decode(ForecastResponse.self, from: forecastData)
+        let displayName = [place.name, place.country].compactMap { $0 }.joined(separator: ", ")
+        return WeatherAnswer(name: displayName, temperature: forecast.current_weather.temperature, wind: forecast.current_weather.windspeed)
+    }
+}
+
+struct LocalTranslator {
+    static func translate(_ phrase: String) -> String {
+        let lower = phrase.lowercased()
+        let dictionary = [
+            "hei": "hello",
+            "ha det": "goodbye",
+            "takk": "thank you",
+            "god morgen": "good morning",
+            "jeg elsker deg": "I love you",
+            "hvordan går det": "how are you",
+            "hvor er bussen": "where is the bus"
+        ]
+        for (source, target) in dictionary where lower.contains(source) {
+            return "Oversatt: \(target)."
+        }
+        return "Jeg holder deg i appen. Lokal mini-oversetter kan de vanligste frasene nå; full oversetting trenger H0RII AI/translation backend."
     }
 }
 

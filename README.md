@@ -29,11 +29,13 @@ This is a native H0RII companion / command-center app:
 - Projects tab with search, favorites and project cards
 - Status tab for web, Discord, Minecraft and security systems
 - Voice tab with push-to-talk speech-to-text and spoken replies
-- Bus route commands that open Apple Maps transit directions
-- Weather commands that open Yr search
-- Contact/number calling with Contacts permission
+- In-app answer panel so H0RII does not kick you out to Safari/Maps/Translate
+- Bus route intent parser for “fra … til …” with Entur API as next backend step
+- In-app weather via Open-Meteo public API
+- Contact/number lookup with Contacts permission, shown in-app before any call action
 - Calculator commands for simple math
-- Translation commands that open Google Translate
+- Local mini-translation for common phrases
+- General in-app fallback answer mode for “ask anything” QoL flow
 - Profile tab for Jhonatan Wik / H0RII
 - App roadmap section
 - Clean dark SwiftUI interface
