@@ -8,14 +8,14 @@ struct RootView: View {
             DashboardView()
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(0)
+            VoiceAssistantView()
+                .tabItem { Label("Reise", systemImage: "bus.fill") }
+                .tag(1)
             ProjectsView()
                 .tabItem { Label("Projects", systemImage: "square.grid.2x2.fill") }
-                .tag(1)
+                .tag(2)
             StatusView()
                 .tabItem { Label("Status", systemImage: "waveform.path.ecg") }
-                .tag(2)
-            VoiceAssistantView()
-                .tabItem { Label("Voice", systemImage: "mic.circle.fill") }
                 .tag(3)
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }

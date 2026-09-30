@@ -311,11 +311,13 @@ struct VoiceAssistantView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("H0RII Voice")
+                            Text("H0RII Reise")
                                 .font(.largeTitle.bold())
-                            Text("All-in-one QoL assistant. Ask anything in the app — no browser jump-outs.")
+                            Text("Skyss-style travel assistant with better place recognition, voice and spoken replies.")
                                 .foregroundStyle(.secondary)
                         }
+
+                        ReisePlannerCard()
 
                         VStack(spacing: 14) {
                             Button {
@@ -335,7 +337,7 @@ struct VoiceAssistantView: View {
                             }
                             .buttonStyle(.plain)
 
-                            Text(assistant.transcript.isEmpty ? "Try: ‘Hei H0RII, når går bussen fra Oslo S til Gardermoen?’" : assistant.transcript)
+                            Text(assistant.transcript.isEmpty ? "Try: ‘Når går bussen fra Bergen busstasjon til Åsane terminal?’" : assistant.transcript)
                                 .font(.body)
                                 .foregroundColor(assistant.transcript.isEmpty ? Color.secondary : Color.white)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -382,6 +384,91 @@ struct VoiceAssistantView: View {
             }
             .navigationTitle("Voice")
         }
+    }
+}
+
+struct ReisePlannerCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("God dag")
+                    .font(.title.bold())
+                Spacer()
+                Label("Reise", systemImage: "bus.fill")
+                    .font(.caption.bold())
+                    .foregroundStyle(.orange)
+            }
+            PickerLikeTabs()
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Fra")
+                        .font(.title2.bold())
+                    Label("Din posisjon", systemImage: "location.fill")
+                        .font(.title3.bold())
+                        .foregroundStyle(.orange)
+                }
+                Divider().background(.white.opacity(0.14))
+                HStack {
+                    Text("Til")
+                        .font(.title2.bold())
+                    Text("Hvor skal du?")
+                        .font(.title2.bold())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.title2.bold())
+                        .foregroundStyle(.orange)
+                }
+            }
+            .padding(18)
+            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 24))
+            SectionTitle("Gjenkjente steder")
+            VStack(spacing: 10) {
+                PlaceSuggestion(title: "Bergen busstasjon", detail: "Bergen, Vestland")
+                PlaceSuggestion(title: "Åsane terminal", detail: "Bergen, Vestland")
+                PlaceSuggestion(title: "Lagunen terminal", detail: "Bergen, Vestland")
+            }
+        }
+        .padding(18)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 30).stroke(.white.opacity(0.1)))
+    }
+}
+
+struct PickerLikeTabs: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            Text("Finn reise")
+                .font(.subheadline.bold())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.35), in: Capsule())
+            Text("Se avganger")
+                .font(.subheadline.bold())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+        }
+        .padding(4)
+        .background(Color.white.opacity(0.08), in: Capsule())
+    }
+}
+
+struct PlaceSuggestion: View {
+    let title: String
+    let detail: String
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bus.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "tram.fill").foregroundStyle(.orange)
+        }
+        .padding(14)
+        .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 18))
     }
 }
 
@@ -537,12 +624,13 @@ final class VoiceAssistantController: NSObject, ObservableObject {
     }
 
     private func planTransit(from text: String) {
-        let parts = splitFromTo(text)
+        let corrected = correctTravelSpeech(text)
+        let parts = splitFromTo(corrected)
         guard let from = parts.from, let to = parts.to else {
-            answer("Si det sånn: buss fra Oslo S til Gardermoen. Jeg holder svaret inne i appen.")
+            answer("Si det sånn: Når går bussen fra Bergen busstasjon til Åsane terminal. Jeg prøver å rette stedene hvis talegjenkjenningen hører feil.")
             return
         }
-        answer("Buss fra \(from) til \(to): Jeg har laget in-app ruteplan. Neste steg er å koble denne til Entur API for ekte avgangstider. Foreløpig: gå til \(from), velg kollektiv retning \(to), og sjekk neste avgang i H0RII når API-et er koblet.")
+        answer("Reise fra \(from) til \(to). Jeg gjenkjente stedene og holder deg inne i appen. Neste steg er ekte Entur/Skyss-avgang direkte her: linje, avgangstid, forsinkelse og gangtid.")
     }
 
     private func weather(from text: String) async {
@@ -646,11 +734,38 @@ final class VoiceAssistantController: NSObject, ObservableObject {
     }
 
     private func splitFromTo(_ text: String) -> (from: String?, to: String?) {
-        let cleaned = text.replacingOccurrences(of: "når går bussen", with: "").replacingOccurrences(of: "buss", with: "")
+        let cleaned = text
+            .replacingOccurrences(of: "når går bussen", with: "")
+            .replacingOccurrences(of: "nar gar bussen", with: "")
+            .replacingOccurrences(of: "bussen", with: "")
+            .replacingOccurrences(of: "buss", with: "")
         guard let fromRange = cleaned.range(of: "fra "), let toRange = cleaned.range(of: " til ") else { return (nil, nil) }
-        let from = String(cleaned[fromRange.upperBound..<toRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let to = String(cleaned[toRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let fromRaw = String(cleaned[fromRange.upperBound..<toRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let toRaw = String(cleaned[toRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let from = knownPlace(fromRaw)
+        let to = knownPlace(toRaw)
         return (from.isEmpty ? nil : from, to.isEmpty ? nil : to)
+    }
+
+    private func correctTravelSpeech(_ value: String) -> String {
+        value.lowercased()
+            .replacingOccurrences(of: "å sane", with: "åsane")
+            .replacingOccurrences(of: "a sane", with: "åsane")
+            .replacingOccurrences(of: "asane", with: "åsane")
+            .replacingOccurrences(of: "bergen bus station", with: "bergen busstasjon")
+            .replacingOccurrences(of: "bergen busstation", with: "bergen busstasjon")
+            .replacingOccurrences(of: "bergen buss stasjon", with: "bergen busstasjon")
+            .replacingOccurrences(of: "bergen bussen stasjon", with: "bergen busstasjon")
+            .replacingOccurrences(of: "bærgen", with: "bergen")
+    }
+
+    private func knownPlace(_ value: String) -> String {
+        let text = correctTravelSpeech(value)
+        if text.contains("bergen") && (text.contains("busstasjon") || text.contains("stasjon")) { return "Bergen busstasjon" }
+        if text.contains("åsane") { return "Åsane terminal" }
+        if text.contains("lagunen") { return "Lagunen terminal" }
+        if text.contains("sandvik") { return "Sandvikvåg ferjekai" }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func normalizedPhoneNumber(_ value: String) -> String? {
