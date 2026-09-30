@@ -14,9 +14,12 @@ struct RootView: View {
             StatusView()
                 .tabItem { Label("Status", systemImage: "waveform.path.ecg") }
                 .tag(2)
+            VoiceAssistantView()
+                .tabItem { Label("Voice", systemImage: "mic.circle.fill") }
+                .tag(3)
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
-                .tag(3)
+                .tag(4)
         }
         .tint(.white)
         .preferredColorScheme(.dark)

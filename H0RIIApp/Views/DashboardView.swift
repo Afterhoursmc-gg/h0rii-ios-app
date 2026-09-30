@@ -1,4 +1,8 @@
 import SwiftUI
+import Speech
+import AVFoundation
+import Contacts
+import UIKit
 
 struct DashboardView: View {
     @StateObject private var statsStore = PublicStatsStore()
@@ -295,5 +299,411 @@ struct ActivityCard: View {
     }
 }
 
+struct VoiceAssistantView: View {
+    @StateObject private var assistant = VoiceAssistantController()
+    @State private var typedCommand = ""
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                H0RIIBackground()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("H0RII Voice")
+                                .font(.largeTitle.bold())
+                            Text("Push-to-talk assistant for bus routes, weather, calls, calculator and translation.")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        VStack(spacing: 14) {
+                            Button {
+                                assistant.toggleListening()
+                            } label: {
+                                VStack(spacing: 10) {
+                                    Image(systemName: assistant.isListening ? "waveform.circle.fill" : "mic.circle.fill")
+                                        .font(.system(size: 76))
+                                        .symbolRenderingMode(.hierarchical)
+                                    Text(assistant.isListening ? "Listening… tap to stop" : "Hold the idea. Tap and speak.")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 28)
+                                .background(assistant.isListening ? Color.red.opacity(0.22) : Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 30))
+                                .overlay(RoundedRectangle(cornerRadius: 30).stroke(.white.opacity(0.12)))
+                            }
+                            .buttonStyle(.plain)
+
+                            Text(assistant.transcript.isEmpty ? "Try: ‘Hei H0RII, når går bussen fra Oslo S til Gardermoen?’" : assistant.transcript)
+                                .font(.body)
+                                .foregroundStyle(assistant.transcript.isEmpty ? .secondary : .white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                                .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 18))
+                        }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            SectionTitle("Type a test command")
+                            HStack(spacing: 10) {
+                                TextField("Ask H0RII…", text: $typedCommand)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .padding(14)
+                                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                                Button("Run") {
+                                    assistant.handle(typedCommand)
+                                    typedCommand = ""
+                                }
+                                .font(.headline)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                                .foregroundStyle(.black)
+                            }
+                        }
+
+                        if !assistant.response.isEmpty {
+                            ActivityCard(title: "H0RII says", text: assistant.response, symbol: "speaker.wave.2.fill", trailing: "Voice")
+                        }
+
+                        SectionTitle("Skills")
+                        LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {
+                            VoiceSkillCard(title: "Bus", text: "‘buss fra Oslo til Bergen’", icon: "bus.fill")
+                            VoiceSkillCard(title: "Weather", text: "‘vær i Oslo’", icon: "cloud.sun.fill")
+                            VoiceSkillCard(title: "Call", text: "‘ring Sofie’ or number", icon: "phone.fill")
+                            VoiceSkillCard(title: "Math", text: "‘kalkuler 12 * 8’", icon: "function")
+                            VoiceSkillCard(title: "Translate", text: "‘oversett hei til engelsk’", icon: "character.book.closed.fill")
+                            VoiceSkillCard(title: "Speak back", text: "Reads answers aloud", icon: "speaker.wave.3.fill")
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Voice")
+        }
+    }
+}
+
+struct VoiceSkillCard: View {
+    let title: String
+    let text: String
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon).font(.title2).foregroundStyle(.white)
+            Text(title).font(.headline)
+            Text(text).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 20))
+    }
+}
+
+@MainActor
+final class VoiceAssistantController: NSObject, ObservableObject {
+    @Published var transcript = ""
+    @Published var response = ""
+    @Published var isListening = false
+
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "nb_NO"))
+    private let audioEngine = AVAudioEngine()
+    private let synthesizer = AVSpeechSynthesizer()
+    private let contactStore = CNContactStore()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+
+    func toggleListening() {
+        isListening ? stopListening() : startListening()
+    }
+
+    func startListening() {
+        Task {
+            let speechAllowed = await requestSpeechPermission()
+            let micAllowed = await requestMicrophonePermission()
+            guard speechAllowed && micAllowed else {
+                answer("I need microphone and speech recognition access first.")
+                return
+            }
+            beginRecognition()
+        }
+    }
+
+    func stopListening() {
+        audioEngine.stop()
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        isListening = false
+        let finalText = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !finalText.isEmpty { handle(finalText) }
+    }
+
+    func handle(_ rawText: String) {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        transcript = text
+        let normalized = text.lowercased()
+            .replacingOccurrences(of: "hei horii", with: "")
+            .replacingOccurrences(of: "hei h0rii", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if normalized.contains("buss") || normalized.contains("bus") {
+            openTransit(from: normalized)
+        } else if normalized.contains("vær") || normalized.contains("weather") {
+            openWeather(from: normalized)
+        } else if normalized.hasPrefix("ring ") || normalized.contains(" ring ") || normalized.hasPrefix("call ") {
+            callContactOrNumber(from: normalized)
+        } else if normalized.contains("kalkuler") || normalized.contains("calculator") || normalized.contains("regn ut") {
+            calculate(from: normalized)
+        } else if normalized.contains("oversett") || normalized.contains("translate") {
+            translate(from: normalized)
+        } else {
+            answer("I can help with bus routes, weather, contacts, calculator and translation. Try saying: buss fra Oslo S til Gardermoen.")
+        }
+    }
+
+    private func beginRecognition() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        transcript = ""
+
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            answer("Could not start microphone session.")
+            return
+        }
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        recognitionRequest = request
+
+        let inputNode = audioEngine.inputNode
+        inputNode.removeTap(onBus: 0)
+        let format = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
+            request?.append(buffer)
+        }
+
+        audioEngine.prepare()
+        do { try audioEngine.start() } catch {
+            answer("Could not start audio engine.")
+            return
+        }
+
+        isListening = true
+        recognitionTask = recognizer?.recognitionTask(with: request) { [weak self] result, error in
+            Task { @MainActor in
+                guard let self else { return }
+                if let result { self.transcript = result.bestTranscription.formattedString }
+                if error != nil || result?.isFinal == true { self.stopListening() }
+            }
+        }
+    }
+
+    private func requestSpeechPermission() async -> Bool {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status == .authorized)
+            }
+        }
+    }
+
+    private func requestMicrophonePermission() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAudioSession.sharedInstance().requestRecordPermission { allowed in
+                continuation.resume(returning: allowed)
+            }
+        }
+    }
+
+    private func answer(_ text: String) {
+        response = text
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "nb-NO") ?? AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.48
+        synthesizer.stopSpeaking(at: .immediate)
+        synthesizer.speak(utterance)
+    }
+
+    private func openTransit(from text: String) {
+        let parts = splitFromTo(text)
+        guard let from = parts.from, let to = parts.to else {
+            answer("Say it like: buss fra Oslo S til Gardermoen.")
+            return
+        }
+        openURL("http://maps.apple.com/?saddr=\(from.urlEncoded)&daddr=\(to.urlEncoded)&dirflg=r")
+        answer("Opening transit directions from \(from) to \(to).")
+    }
+
+    private func openWeather(from text: String) {
+        let city = text
+            .replacingOccurrences(of: "hvordan er været i", with: "")
+            .replacingOccurrences(of: "vær i", with: "")
+            .replacingOccurrences(of: "weather in", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = city.isEmpty ? "current location" : city
+        openURL("https://www.yr.no/en/search?q=\(query.urlEncoded)")
+        answer("Opening weather for \(query).")
+    }
+
+    private func callContactOrNumber(from text: String) {
+        let query = text
+            .replacingOccurrences(of: "ring", with: "")
+            .replacingOccurrences(of: "call", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            answer("Who should I call?")
+            return
+        }
+        if let direct = normalizedPhoneNumber(query), !direct.isEmpty {
+            openURL("tel://\(direct)")
+            answer("Calling \(query).")
+            return
+        }
+
+        contactStore.requestAccess(for: .contacts) { [weak self] granted, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                guard granted else {
+                    self.answer("I need Contacts access before I can call saved contacts.")
+                    return
+                }
+                let keys: [CNKeyDescriptor] = [CNContactGivenNameKey as CNKeyDescriptor, CNContactFamilyNameKey as CNKeyDescriptor, CNContactPhoneNumbersKey as CNKeyDescriptor]
+                let request = CNContactFetchRequest(keysToFetch: keys)
+                var match: (name: String, phone: String)?
+                try? self.contactStore.enumerateContacts(with: request) { contact, stop in
+                    let name = "\(contact.givenName) \(contact.familyName)".trimmingCharacters(in: .whitespaces)
+                    if name.lowercased().contains(query.lowercased()), let number = contact.phoneNumbers.first?.value.stringValue {
+                        match = (name, number)
+                        stop.pointee = true
+                    }
+                }
+                if let match, let phone = self.normalizedPhoneNumber(match.phone) {
+                    self.openURL("tel://\(phone)")
+                    self.answer("Calling \(match.name).")
+                } else {
+                    self.answer("I could not find \(query) in contacts.")
+                }
+            }
+        }
+    }
+
+    private func calculate(from text: String) {
+        let expression = text
+            .replacingOccurrences(of: "kalkuler", with: "")
+            .replacingOccurrences(of: "regn ut", with: "")
+            .replacingOccurrences(of: "calculator", with: "")
+            .replacingOccurrences(of: "pluss", with: "+")
+            .replacingOccurrences(of: "minus", with: "-")
+            .replacingOccurrences(of: "ganger", with: "*")
+            .replacingOccurrences(of: "delt på", with: "/")
+        if let value = SimpleCalculator.evaluate(expression) {
+            answer("Svaret er \(value.cleanString).")
+        } else {
+            answer("I could not calculate that yet. Try: kalkuler 12 * 8.")
+        }
+    }
+
+    private func translate(from text: String) {
+        let phrase = text
+            .replacingOccurrences(of: "oversett", with: "")
+            .replacingOccurrences(of: "translate", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !phrase.isEmpty else {
+            answer("Say what you want me to translate.")
+            return
+        }
+        openURL("https://translate.google.com/?sl=auto&tl=en&text=\(phrase.urlEncoded)&op=translate")
+        answer("Opening translation for: \(phrase).")
+    }
+
+    private func splitFromTo(_ text: String) -> (from: String?, to: String?) {
+        let cleaned = text.replacingOccurrences(of: "når går bussen", with: "").replacingOccurrences(of: "buss", with: "")
+        guard let fromRange = cleaned.range(of: "fra "), let toRange = cleaned.range(of: " til ") else { return (nil, nil) }
+        let from = String(cleaned[fromRange.upperBound..<toRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let to = String(cleaned[toRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return (from.isEmpty ? nil : from, to.isEmpty ? nil : to)
+    }
+
+    private func normalizedPhoneNumber(_ value: String) -> String? {
+        let allowed = Set("+0123456789")
+        let phone = String(value.filter { allowed.contains($0) })
+        return phone.count >= 3 ? phone : nil
+    }
+
+    private func openURL(_ raw: String) {
+        guard let url = URL(string: raw) else { return }
+        UIApplication.shared.open(url)
+    }
+}
+
+struct SimpleCalculator {
+    static func evaluate(_ expression: String) -> Double? {
+        let tokens = tokenize(expression)
+        guard !tokens.isEmpty else { return nil }
+        var values: [Double] = []
+        var ops: [Character] = []
+
+        func precedence(_ op: Character) -> Int { (op == "*" || op == "/") ? 2 : 1 }
+        func apply() {
+            guard values.count >= 2, let op = ops.popLast() else { return }
+            let rhs = values.removeLast()
+            let lhs = values.removeLast()
+            switch op {
+            case "+": values.append(lhs + rhs)
+            case "-": values.append(lhs - rhs)
+            case "*": values.append(lhs * rhs)
+            case "/": values.append(rhs == 0 ? .nan : lhs / rhs)
+            default: break
+            }
+        }
+
+        for token in tokens {
+            if let number = Double(token) {
+                values.append(number)
+            } else if let op = token.first, "+-*/".contains(op) {
+                while let last = ops.last, precedence(last) >= precedence(op) { apply() }
+                ops.append(op)
+            }
+        }
+        while !ops.isEmpty { apply() }
+        return values.first?.isFinite == true ? values.first : nil
+    }
+
+    private static func tokenize(_ expression: String) -> [String] {
+        var tokens: [String] = []
+        var number = ""
+        for char in expression.replacingOccurrences(of: ",", with: ".") {
+            if char.isNumber || char == "." {
+                number.append(char)
+            } else if "+-*/".contains(char) {
+                if !number.isEmpty { tokens.append(number); number = "" }
+                tokens.append(String(char))
+            } else if char.isWhitespace, !number.isEmpty {
+                tokens.append(number); number = ""
+            }
+        }
+        if !number.isEmpty { tokens.append(number) }
+        return tokens
+    }
+}
+
+extension String {
+    var urlEncoded: String {
+        addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? self
+    }
+}
+
+extension Double {
+    var cleanString: String {
+        truncatingRemainder(dividingBy: 1) == 0 ? String(Int(self)) : String(format: "%.2f", self)
+    }
+}
+
 #Preview { DashboardView() }
 #Preview { StatusView() }
+#Preview { VoiceAssistantView() }

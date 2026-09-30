@@ -28,6 +28,12 @@ This is a native H0RII companion / command-center app:
 - Quick links to H0RII, AfterHoursMC, HXSecurity and H0RII Excel
 - Projects tab with search, favorites and project cards
 - Status tab for web, Discord, Minecraft and security systems
+- Voice tab with push-to-talk speech-to-text and spoken replies
+- Bus route commands that open Apple Maps transit directions
+- Weather commands that open Yr search
+- Contact/number calling with Contacts permission
+- Calculator commands for simple math
+- Translation commands that open Google Translate
 - Profile tab for Jhonatan Wik / H0RII
 - App roadmap section
 - Clean dark SwiftUI interface
