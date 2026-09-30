@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @StateObject private var statsStore = PublicStatsStore()
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -10,6 +12,7 @@ struct DashboardView: View {
                     VStack(alignment: .leading, spacing: 22) {
                         hero
                         stats
+                        AfterHoursStatsCard(store: statsStore)
                         quickActions
                         SectionTitle("Live overview")
                         LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {
@@ -24,9 +27,11 @@ struct DashboardView: View {
                     }
                     .padding(20)
                 }
+                .refreshable { await statsStore.refresh() }
             }
             .navigationTitle("H0RII")
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .task { await statsStore.refresh() }
         }
     }
 
@@ -89,6 +94,8 @@ struct DashboardView: View {
 }
 
 struct StatusView: View {
+    @StateObject private var statsStore = PublicStatsStore()
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -97,17 +104,20 @@ struct StatusView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         Text("Status")
                             .font(.largeTitle.bold())
-                        Text("Local status snapshot for H0RII systems. Later this can connect to status.horii.dev APIs.")
+                        Text("Live-facing snapshot for H0RII systems. Pull down to refresh public stats.")
                             .foregroundStyle(.secondary)
+                        AfterHoursStatsCard(store: statsStore)
                         ForEach(H0RIIService.live) { service in
                             StatusRow(service: service)
                         }
-                        ActivityCard(title: "Next upgrade", text: "Wire this tab to a real public status endpoint with uptime, services and incidents.", symbol: "antenna.radiowaves.left.and.right", trailing: "API")
+                        ActivityCard(title: "Next upgrade", text: "Wire this tab to status.horii.dev for incidents, uptime history and push notifications.", symbol: "antenna.radiowaves.left.and.right", trailing: "API")
                     }
                     .padding(20)
                 }
+                .refreshable { await statsStore.refresh() }
             }
             .navigationTitle("Status")
+            .task { await statsStore.refresh() }
         }
     }
 }
@@ -157,6 +167,63 @@ struct QuickAction: View {
                 .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
                 .foregroundStyle(.black)
         }
+    }
+}
+
+struct AfterHoursStatsCard: View {
+    @ObservedObject var store: PublicStatsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("AfterHoursMC public stats", systemImage: "gamecontroller.fill")
+                    .font(.headline)
+                Spacer()
+                if store.isLoading {
+                    ProgressView().tint(.white)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 10) {
+                MetricCell(title: "Servers", value: store.stats.servers?.compactFormatted ?? "—")
+                MetricCell(title: "Online", value: store.stats.playersOnline?.compactFormatted ?? "—")
+                MetricCell(title: "Nodes", value: store.stats.nodes?.compactFormatted ?? "—")
+                MetricCell(title: "Customers", value: store.stats.customers?.compactFormatted ?? "—")
+            }
+
+            HStack {
+                Label("Uptime", systemImage: "checkmark.seal.fill")
+                Spacer()
+                Text(store.stats.uptime.map { String(format: "%.2f%%", $0) } ?? "—")
+                    .font(.headline)
+                    .foregroundStyle(.green)
+            }
+            .font(.subheadline)
+
+            Text(store.lastError ?? "Updated from public endpoint when reachable")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.08)))
+    }
+}
+
+struct MetricCell: View {
+    let title: String
+    let value: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value).font(.title3.bold())
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 16))
     }
 }
 

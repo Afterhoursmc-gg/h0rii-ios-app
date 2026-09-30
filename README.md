@@ -1,6 +1,6 @@
 # H0RII iOS App
 
-Native SwiftUI iOS starter app for H0RII, built as an Xcode project from Linux so it can be opened and published from a Mac.
+Native SwiftUI iOS companion / command-center app for H0RII, built as an Xcode project from Linux so it can be opened and published from a Mac.
 
 Repository: https://github.com/Afterhoursmc-gg/h0rii-ios-app
 
@@ -23,20 +23,23 @@ Then:
 This is a native H0RII companion / command-center app:
 
 - Home dashboard with H0RII branding
+- AfterHoursMC public stats card connected to `https://horii.dev/api/public/stats`
+- Pull-to-refresh stats
 - Quick links to H0RII, AfterHoursMC, HXSecurity and H0RII Excel
-- Projects tab with project cards
+- Projects tab with search, favorites and project cards
 - Status tab for web, Discord, Minecraft and security systems
 - Profile tab for Jhonatan Wik / H0RII
 - App roadmap section
 - Clean dark SwiftUI interface
-- Local-only static data for now, no secrets and no backend credentials
+- No secrets and no backend credentials
 
 ## Next upgrades
 
-- Connect Status tab to a public `status.horii.dev` API
-- Add AfterHoursMC public stats endpoint
+- Connect Status tab to `status.horii.dev` uptime/incidents API
 - Add push notifications for incidents/launches
+- Add richer AfterHoursMC details from safe public endpoint
 - Add authenticated admin mode later if needed
+- Add custom app icon images before App Store submission
 
 ## Publish notes
 
