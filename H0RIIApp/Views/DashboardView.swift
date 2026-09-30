@@ -317,7 +317,7 @@ struct VoiceAssistantView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        ReisePlannerCard()
+                        ReisePlannerCard(assistant: assistant)
 
                         VStack(spacing: 14) {
                             Button {
@@ -388,10 +388,14 @@ struct VoiceAssistantView: View {
 }
 
 struct ReisePlannerCard: View {
+    @ObservedObject var assistant: VoiceAssistantController
+    @State private var fromPlace = ""
+    @State private var toPlace = ""
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("God dag")
+                Text("Hvor vil du reise?")
                     .font(.title.bold())
                 Spacer()
                 Label("Reise", systemImage: "bus.fill")
@@ -399,32 +403,28 @@ struct ReisePlannerCard: View {
                     .foregroundStyle(.orange)
             }
             PickerLikeTabs()
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Fra")
-                        .font(.title2.bold())
-                    Label("Din posisjon", systemImage: "location.fill")
-                        .font(.title3.bold())
-                        .foregroundStyle(.orange)
-                }
+            VStack(alignment: .leading, spacing: 12) {
+                PlaceTextField(title: "Fra", placeholder: "Din posisjon eller sted", text: $fromPlace)
                 Divider().background(.white.opacity(0.14))
-                HStack {
-                    Text("Til")
-                        .font(.title2.bold())
-                    Text("Hvor skal du?")
-                        .font(.title2.bold())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Image(systemName: "arrow.up.arrow.down")
-                        .font(.title2.bold())
-                        .foregroundStyle(.orange)
+                PlaceTextField(title: "Til", placeholder: "Søk destinasjon", text: $toPlace)
+                Button {
+                    let from = fromPlace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "din posisjon" : fromPlace
+                    let to = toPlace.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Åsane terminal" : toPlace
+                    assistant.handle("Når går bussen fra \(from) til \(to)")
+                } label: {
+                    Label("Søk reise", systemImage: "magnifyingglass")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
             }
             .padding(18)
             .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 24))
-            SectionTitle("Gjenkjente steder")
+            SectionTitle("Forslag")
             VStack(spacing: 10) {
-                PlaceSuggestion(title: "Bergen busstasjon", detail: "Bergen, Vestland")
+                PlaceSuggestion(title: "Bergen busstasjon", detail: "Trykk/skriv som Fra eller Til")
                 PlaceSuggestion(title: "Åsane terminal", detail: "Bergen, Vestland")
                 PlaceSuggestion(title: "Lagunen terminal", detail: "Bergen, Vestland")
             }
@@ -432,6 +432,25 @@ struct ReisePlannerCard: View {
         .padding(18)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 30).stroke(.white.opacity(0.1)))
+    }
+}
+
+struct PlaceTextField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title).font(.caption.bold()).foregroundStyle(.secondary)
+            TextField(placeholder, text: $text)
+                .textInputAutocapitalization(.words)
+                .disableAutocorrection(false)
+                .font(.title3.bold())
+                .padding(14)
+                .background(Color.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.08)))
+        }
     }
 }
 
