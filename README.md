@@ -75,9 +75,9 @@ idle → waitingForWakeWord → wakeWordDetected → listening → processing �
 Implemented:
 
 - `WakeWordDetector` protocol exactly so a true local wake-word engine can replace the adapter later.
-- **Picovoice Porcupine Swift Package connected** for a real local wake-word engine.
-- `PorcupineWakeWordDetector` uses a local `Hei Horii` `.ppn` keyword model when configured.
-- Prototype `SpeechWakeWordDetector` remains as fallback when Porcupine AccessKey/model are missing.
+- **Free CoreML local wake-word adapter connected** for a real local wake-word engine with no paid SDK.
+- `LocalWakeWordDetector` uses a bundled `HeiHoriiWakeWord.mlmodel/mlmodelc` when present.
+- Prototype `SpeechWakeWordDetector` remains as fallback when the local model is missing.
 - `AVAudioSession` configured with `.playAndRecord`, `.voiceChat`, Bluetooth and speaker options.
 - `SFSpeechRecognizer` command transcription after the wake word.
 - `HoriiAIService.send(message:)` with mock provider first, and HTTP provider scaffold for your backend.
@@ -98,23 +98,25 @@ Enable these on the target in Xcode:
   - `UIBackgroundModes`: `audio`, `fetch`, `remote-notification`
   - `BGTaskSchedulerPermittedIdentifiers`: `dev.horii.H0RIIApp.refresh`
 
-## Real `Hei Horii` setup with Porcupine
+## Real `Hei Horii` setup with a free local model
 
-This repo now includes the Picovoice Porcupine Swift Package dependency:
+No Picovoice and no paid AccessKey are required now.
+
+Horii looks for a bundled CoreML model named:
 
 ```text
-https://github.com/Picovoice/porcupine.git
+HeiHoriiWakeWord.mlmodel
 ```
 
-To test the real local wake-word path on iPhone:
+To test the real local path on iPhone:
 
-1. Open Picovoice Console and create an iOS custom keyword for `Hei Horii`.
-2. Download the iOS `.ppn` file.
-3. Add it to the Xcode app target bundle as `hei_horii_ios.ppn`.
-4. Run the app, open the **Horii** tab, paste the Picovoice AccessKey into the local field, then restart the app.
-5. Tap **Enable Assistant**. The status should say `Porcupine lytter lokalt etter Hei Horii`.
+1. Train or convert a free local wake-word model for `Hei Horii` to CoreML.
+2. Add `HeiHoriiWakeWord.mlmodel` to the Xcode target.
+3. Make sure it is included in **Target Membership** for `H0RIIApp`.
+4. Run the app and tap **Enable Assistant**.
+5. The transcript should say `Gratis CoreML wake-word detector lytter lokalt etter Hei Horii`.
 
-No AccessKey is committed to git. No continuous microphone stream is sent to the Horii backend before Porcupine detects the wake word.
+If no model is bundled, Horii falls back to the Apple Speech debug adapter. That fallback costs nothing, but it is not a true dedicated wake-word model.
 
 ## iOS limitation / App Store reality
 
