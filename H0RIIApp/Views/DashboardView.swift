@@ -318,6 +318,7 @@ struct VoiceAssistantView: View {
                         }
 
                         ReisePlannerCard(assistant: assistant)
+                        AlwaysOnH0RIICard()
 
                         VStack(spacing: 14) {
                             Button {
@@ -384,6 +385,65 @@ struct VoiceAssistantView: View {
             }
             .navigationTitle("Voice")
         }
+    }
+}
+
+struct AlwaysOnH0RIICard: View {
+    @AppStorage("h0rii.lastBackgroundRefresh") private var lastBackgroundRefresh: Double = 0
+    @State private var permissionMessage = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Hei H0RII", systemImage: "waveform.circle.fill")
+                    .font(.title3.bold())
+                Spacer()
+                Text("Siri Shortcut")
+                    .font(.caption.bold())
+                    .foregroundStyle(.orange)
+            }
+            Text("iOS lar ikke tredjepartsapper lytte alltid etter egne wake words når telefonen er låst. Derfor bruker H0RII Siri/App Intents: si ‘Hei Siri, H0RII’ eller ‘Hei Siri, ask H0RII’.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Bakgrunnsoppdatering registrert", systemImage: "arrow.triangle.2.circlepath")
+                Label("Push/varsler klar for H0RII hints", systemImage: "bell.badge.fill")
+                Label("Låst skjerm går via Siri, ikke skjult mic-loop", systemImage: "lock.fill")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.78))
+
+            HStack(spacing: 10) {
+                Button("Aktiver varsel-test") {
+                    Task {
+                        await H0RIINotificationService.shared.sendLocalWakeHint()
+                        permissionMessage = "Varsel-test sendt hvis du godkjente notifications."
+                    }
+                }
+                .font(.headline)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(.black)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Sist BG-refresh")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(lastBackgroundRefresh > 0 ? Date(timeIntervalSince1970: lastBackgroundRefresh).formatted(date: .omitted, time: .shortened) : "Venter")
+                        .font(.caption.bold())
+                }
+            }
+            if !permissionMessage.isEmpty {
+                Text(permissionMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.08)))
     }
 }
 
@@ -555,7 +615,15 @@ final class VoiceAssistantController: NSObject, ObservableObject {
             .replacingOccurrences(of: "hei h0rii", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if normalized.contains("buss") || normalized.contains("bus") {
+        if let quickMath = SimpleCalculator.evaluate(normalized
+            .replacingOccurrences(of: "hva er", with: "")
+            .replacingOccurrences(of: "ka er", with: "")
+            .replacingOccurrences(of: "en", with: "1")
+            .replacingOccurrences(of: "ett", with: "1")
+            .replacingOccurrences(of: "to", with: "2")
+            .replacingOccurrences(of: "pluss", with: "+")) {
+            answer("Svaret er \(quickMath.cleanString).")
+        } else if normalized.contains("buss") || normalized.contains("bus") {
             planTransit(from: normalized)
         } else if normalized.contains("vær") || normalized.contains("weather") {
             Task { await weather(from: normalized) }
