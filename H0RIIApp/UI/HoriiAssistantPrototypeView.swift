@@ -15,6 +15,7 @@ struct HoriiAssistantPrototypeView: View {
 
                 stateCard
                 enableButton
+                testControls
                 telemetryCard
                 privacyCard
                 limitationCard
@@ -59,6 +60,32 @@ struct HoriiAssistantPrototypeView: View {
             .background(controller.state == .idle ? Color.cyan : Color.red, in: RoundedRectangle(cornerRadius: 18))
             .foregroundColor(.black)
         }
+    }
+
+    private var testControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Test without locking")
+                .font(.headline)
+            Text("Use this to prove the state machine, AI mock and TTS work before testing iOS locked-screen behavior.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+            HStack(spacing: 10) {
+                Button("Simulate Hei Horii") {
+                    Task { await controller.simulateWakeWordForTesting() }
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("Send typed") {
+                    Task { await controller.sendTypedCommandForTesting() }
+                }
+                .buttonStyle(.bordered)
+            }
+            TextField("hva er en pluss en", text: $controller.typedCommand)
+                .textFieldStyle(.roundedBorder)
+                .foregroundColor(.primary)
+        }
+        .padding()
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 24))
     }
 
     private var telemetryCard: some View {

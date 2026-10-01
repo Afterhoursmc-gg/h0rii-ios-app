@@ -10,6 +10,7 @@ final class HoriiAssistantController: ObservableObject {
     @Published private(set) var microphoneStatus = "Not requested"
     @Published private(set) var backgroundListeningActive = false
     @Published private(set) var technicalLimitation = ""
+    @Published var typedCommand = ""
 
     private let wakeWordDetector: WakeWordDetector
     private let speechRecognizer: HoriiSpeechRecognizer
@@ -23,6 +24,9 @@ final class HoriiAssistantController: ObservableObject {
         self.tts = HoriiTTS()
         self.wakeWordDetector.onWakeWordDetected = { [weak self] in
             Task { @MainActor in await self?.handleWakeWord() }
+        }
+        self.wakeWordDetector.onPartialTranscript = { [weak self] partial in
+            self?.transcript = partial
         }
     }
 
@@ -38,6 +42,9 @@ final class HoriiAssistantController: ObservableObject {
         self.tts = tts
         self.wakeWordDetector.onWakeWordDetected = { [weak self] in
             Task { @MainActor in await self?.handleWakeWord() }
+        }
+        self.wakeWordDetector.onPartialTranscript = { [weak self] partial in
+            self?.transcript = partial
         }
     }
 
@@ -66,6 +73,33 @@ final class HoriiAssistantController: ObservableObject {
         state = .idle
     }
 
+    func simulateWakeWordForTesting() async {
+        if state == .idle {
+            await enableAssistant()
+        }
+        wakeWordDetector.stop()
+        transcript = "Wake-word test: Hei Horii"
+        state = .wakeWordDetected
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        let command = typedCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "hva er en pluss en" : typedCommand
+        transcript = command
+        await process(command: command)
+        if backgroundListeningActive {
+            enterWakeWordMode()
+        }
+    }
+
+    func sendTypedCommandForTesting() async {
+        let command = typedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !command.isEmpty else { return }
+        wakeWordDetector.stop()
+        transcript = command
+        await process(command: command)
+        if backgroundListeningActive {
+            enterWakeWordMode()
+        }
+    }
+
     private func enterWakeWordMode() {
         state = .waitingForWakeWord
         transcript = ""
@@ -87,15 +121,23 @@ final class HoriiAssistantController: ObservableObject {
                 enterWakeWordMode()
                 return
             }
-            state = .processing
-            let response = try await aiService.send(message: command)
-            answer = response
-            state = .speaking
-            await tts.speak(response)
+            await process(command: command)
             enterWakeWordMode()
         } catch {
             answer = "Horii kunne ikke høre kommandoen: \(error.localizedDescription)"
             enterWakeWordMode()
+        }
+    }
+
+    private func process(command: String) async {
+        state = .processing
+        do {
+            let response = try await aiService.send(message: command)
+            answer = response
+            state = .speaking
+            await tts.speak(response)
+        } catch {
+            answer = "Horii AI svarte ikke: \(error.localizedDescription)"
         }
     }
 }
