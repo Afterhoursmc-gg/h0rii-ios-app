@@ -44,14 +44,72 @@ This is a native H0RII companion / command-center app:
 - Clean dark SwiftUI interface
 - No secrets and no backend credentials
 
-## iOS voice/background limitation
+## Horii always-listening prototype
 
-iOS does **not** allow third-party apps to run an always-on hidden microphone wake word like Siri while the phone is locked/off. The compliant path is Siri/App Intents + Background App Refresh + notifications:
+The `Horii` tab implements the requested assistant architecture with real Swift code and public Apple APIs:
 
-- Use Siri phrase: `Hei Siri, H0RII` or `Hey Siri, Ask H0RII`.
-- The app registers a background refresh task: `dev.horii.H0RIIApp.refresh`.
-- The app can send notification hints/status when permission is granted.
-- Full custom `Hei H0RII` hotword while locked would require Apple/system-level Siri privileges, not normal App Store APIs.
+```text
+Microphone → WakeWordDetector → Speech-to-Text → HoriiAIService → AVSpeechSynthesizer → Wake Word Mode
+```
+
+Project structure:
+
+```text
+H0RIIApp/
+├── UI/HoriiAssistantPrototypeView.swift
+├── Audio/AudioSessionManager.swift
+├── Audio/WakeWordDetector.swift
+├── Audio/SpeechRecognizer.swift
+├── AI/HoriiAIService.swift
+├── Speech/HoriiTTS.swift
+├── Models/HoriiAssistantState.swift
+└── Services/HoriiAssistantController.swift
+```
+
+State machine:
+
+```text
+idle → waitingForWakeWord → wakeWordDetected → listening → processing → speaking → waitingForWakeWord
+```
+
+Implemented:
+
+- `WakeWordDetector` protocol exactly so a true local wake-word engine can replace the adapter later.
+- Prototype `SpeechWakeWordDetector` for `Hei Horii` / `Hey Horii`.
+- `AVAudioSession` configured with `.playAndRecord`, `.voiceChat`, Bluetooth and speaker options.
+- `SFSpeechRecognizer` command transcription after the wake word.
+- `HoriiAIService.send(message:)` with mock provider first, and HTTP provider scaffold for your backend.
+- `AVSpeechSynthesizer` TTS.
+- UI for state, transcript, answer, microphone permission and background-listening indicator.
+
+## Xcode capabilities / Info.plist
+
+Enable these on the target in Xcode:
+
+- **Signing & Capabilities → Background Modes**
+  - `Audio, AirPlay, and Picture in Picture`
+  - `Background fetch` if you want refresh/status tasks too
+  - `Remote notifications` only if you later add push
+- **Info.plist / generated build settings**
+  - `NSMicrophoneUsageDescription`
+  - `NSSpeechRecognitionUsageDescription`
+  - `UIBackgroundModes`: `audio`, `fetch`, `remote-notification`
+  - `BGTaskSchedulerPermittedIdentifiers`: `dev.horii.H0RIIApp.refresh`
+
+## iOS limitation / App Store reality
+
+iOS does **not** grant third-party apps Siri-level always-on custom hotword entitlement. This prototype uses public APIs only:
+
+- Foreground: the full state machine can run.
+- Locked screen while app has an active permitted audio session: testable on a physical iPhone, but iOS may still suspend/limit continuous speech recognition depending on device, battery, route and system policy.
+- App Store review: background audio must be justified by real audio functionality; a hidden always-on microphone assistant can be rejected.
+- Production path: keep this adapter layer, then plug in a real on-device wake-word SDK/model into `WakeWordDetector` without streaming continuous mic audio to a server.
+
+Siri remains separate:
+
+- `Hei Siri` → Siri
+- `Hei Horii` → Horii prototype when the app/audio session is allowed to keep running
+- fallback supported path: `Hei Siri, H0RII` through App Intents
 
 ## Next upgrades
 

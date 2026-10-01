@@ -8,8 +8,8 @@ struct RootView: View {
             DashboardView()
                 .tabItem { Label("Home", systemImage: "house.fill") }
                 .tag(0)
-            VoiceAssistantView()
-                .tabItem { Label("Reise", systemImage: "bus.fill") }
+            HoriiAssistantPrototypeView()
+                .tabItem { Label("Horii", systemImage: "mic.badge.plus") }
                 .tag(1)
             ProjectsView()
                 .tabItem { Label("Projects", systemImage: "square.grid.2x2.fill") }
