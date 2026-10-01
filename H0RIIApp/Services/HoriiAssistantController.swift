@@ -18,7 +18,7 @@ final class HoriiAssistantController: ObservableObject {
     private let tts: HoriiTTS
 
     init() {
-        self.wakeWordDetector = SpeechWakeWordDetector()
+        self.wakeWordDetector = WakeWordDetectorFactory.make()
         self.speechRecognizer = HoriiSpeechRecognizer()
         self.aiService = MockHoriiAIService()
         self.tts = HoriiTTS()

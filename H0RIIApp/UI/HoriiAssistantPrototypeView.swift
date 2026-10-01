@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HoriiAssistantPrototypeView: View {
     @StateObject private var controller = HoriiAssistantController()
+    @AppStorage("horii.porcupine.accessKey") private var porcupineAccessKey = ""
+    @AppStorage("horii.porcupine.keywordPath") private var porcupineKeywordPath = ""
 
     var body: some View {
         ScrollView {
@@ -16,6 +18,7 @@ struct HoriiAssistantPrototypeView: View {
                 stateCard
                 enableButton
                 testControls
+                porcupineSettings
                 telemetryCard
                 privacyCard
                 limitationCard
@@ -83,6 +86,27 @@ struct HoriiAssistantPrototypeView: View {
             TextField("hva er en pluss en", text: $controller.typedCommand)
                 .textFieldStyle(.roundedBorder)
                 .foregroundColor(.primary)
+        }
+        .padding()
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 24))
+    }
+
+    private var porcupineSettings: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Real wake-word engine")
+                .font(.headline)
+            Text("Porcupine runs wake-word detection locally on the iPhone. Create a custom `Hei Horii` iOS keyword in Picovoice Console, add the `.ppn` to the app bundle as `hei_horii_ios.ppn`, then paste your AccessKey here. No mic stream is sent to Horii backend before wake-word detection.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+            SecureField("Picovoice AccessKey", text: $porcupineAccessKey)
+                .textFieldStyle(.roundedBorder)
+                .foregroundColor(.primary)
+            TextField("Optional keyword path, leave blank for bundled hei_horii_ios.ppn", text: $porcupineKeywordPath)
+                .textFieldStyle(.roundedBorder)
+                .foregroundColor(.primary)
+            Label(porcupineAccessKey.isEmpty ? "Fallback: Apple Speech adapter" : "Porcupine configured after app restart", systemImage: porcupineAccessKey.isEmpty ? "waveform.badge.exclamationmark" : "checkmark.seal")
+                .font(.footnote)
+                .foregroundColor(porcupineAccessKey.isEmpty ? .yellow : .green)
         }
         .padding()
         .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 24))

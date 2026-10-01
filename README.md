@@ -75,7 +75,9 @@ idle → waitingForWakeWord → wakeWordDetected → listening → processing �
 Implemented:
 
 - `WakeWordDetector` protocol exactly so a true local wake-word engine can replace the adapter later.
-- Prototype `SpeechWakeWordDetector` for `Hei Horii` / `Hey Horii`.
+- **Picovoice Porcupine Swift Package connected** for a real local wake-word engine.
+- `PorcupineWakeWordDetector` uses a local `Hei Horii` `.ppn` keyword model when configured.
+- Prototype `SpeechWakeWordDetector` remains as fallback when Porcupine AccessKey/model are missing.
 - `AVAudioSession` configured with `.playAndRecord`, `.voiceChat`, Bluetooth and speaker options.
 - `SFSpeechRecognizer` command transcription after the wake word.
 - `HoriiAIService.send(message:)` with mock provider first, and HTTP provider scaffold for your backend.
@@ -95,6 +97,24 @@ Enable these on the target in Xcode:
   - `NSSpeechRecognitionUsageDescription`
   - `UIBackgroundModes`: `audio`, `fetch`, `remote-notification`
   - `BGTaskSchedulerPermittedIdentifiers`: `dev.horii.H0RIIApp.refresh`
+
+## Real `Hei Horii` setup with Porcupine
+
+This repo now includes the Picovoice Porcupine Swift Package dependency:
+
+```text
+https://github.com/Picovoice/porcupine.git
+```
+
+To test the real local wake-word path on iPhone:
+
+1. Open Picovoice Console and create an iOS custom keyword for `Hei Horii`.
+2. Download the iOS `.ppn` file.
+3. Add it to the Xcode app target bundle as `hei_horii_ios.ppn`.
+4. Run the app, open the **Horii** tab, paste the Picovoice AccessKey into the local field, then restart the app.
+5. Tap **Enable Assistant**. The status should say `Porcupine lytter lokalt etter Hei Horii`.
+
+No AccessKey is committed to git. No continuous microphone stream is sent to the Horii backend before Porcupine detects the wake word.
 
 ## iOS limitation / App Store reality
 
