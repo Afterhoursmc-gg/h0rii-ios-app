@@ -16,11 +16,21 @@ final class HoriiAssistantController: ObservableObject {
     private let aiService: HoriiAIService
     private let tts: HoriiTTS
 
+    init() {
+        self.wakeWordDetector = SpeechWakeWordDetector()
+        self.speechRecognizer = HoriiSpeechRecognizer()
+        self.aiService = MockHoriiAIService()
+        self.tts = HoriiTTS()
+        self.wakeWordDetector.onWakeWordDetected = { [weak self] in
+            Task { @MainActor in await self?.handleWakeWord() }
+        }
+    }
+
     init(
-        wakeWordDetector: WakeWordDetector = SpeechWakeWordDetector(),
-        speechRecognizer: HoriiSpeechRecognizer = HoriiSpeechRecognizer(),
-        aiService: HoriiAIService = MockHoriiAIService(),
-        tts: HoriiTTS = HoriiTTS()
+        wakeWordDetector: WakeWordDetector,
+        speechRecognizer: HoriiSpeechRecognizer,
+        aiService: HoriiAIService,
+        tts: HoriiTTS
     ) {
         self.wakeWordDetector = wakeWordDetector
         self.speechRecognizer = speechRecognizer
